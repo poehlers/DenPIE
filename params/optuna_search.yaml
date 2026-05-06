@@ -1,0 +1,46 @@
+study_name: density_bias_hpo
+storage: sqlite:///output/optuna_density_bias.db
+n_trials: 50
+
+# Reduced epochs for search (full retraining uses 500)
+search_epochs: 75
+search_patience: 20
+
+# Fixed architecture: cnn3d encoder + maf flow (SBI)
+
+# Data configuration (fixed across all trials)
+data:
+  data_path: /projects/prjs1926/data/fli_data/fli_bias_LR/samples_dir/prior/
+  fiducial_path: /projects/prjs1926/data/fli_data/fli_fiducial_bias_LR/samples_dir/prior/
+  field_key: delta_biased
+  param_keys: [cosmo_params, bias_params]
+  all_param_names: [Omega_m, sigma_8, b1, b2, bs2, bn2]
+  active_params: [Omega_m, sigma_8, b1, b2, bs2, bn2]
+  val_split: 0.1
+  test_split: 0.1
+  n_realizations: null
+  log_transform: true
+
+# Hyperparameter search bounds
+search_space:
+  summary_dim: [64, 128, 256, 512]
+  lr:
+    low: 1.0e-6
+    high: 1.0e-3
+    log: true
+  batch_size: [8, 16, 32]
+  weight_decay:
+    low: 1.0e-4
+    high: 1.0e-1
+    log: true
+  dropout:
+    low: 0.0
+    high: 0.3
+  grad_clip:
+    low: 50.0
+    high: 500.0
+  # MAF-specific
+  num_transforms:
+    low: 4
+    high: 16
+  hidden_features: [64, 128, 256]

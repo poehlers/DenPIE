@@ -1,0 +1,54 @@
+name: density_bias_Om_s8_b1_b2_bs2_bn2_LR_stage2_flow_nsf
+
+density:
+  encoder:
+    type: cnn3d          # or cnn3d or swin3d
+    summary_dim: 256
+    patch_size: [4, 4, 4]
+    window_size: [2, 2, 2]
+    depths: [2, 2, 6, 2]
+    num_heads: [3, 6, 12, 24]
+    embed_dim: 96
+    use_checkpointing: true
+    proj_dropout: 0.0
+    load: true
+    model_location: 'output/density_bias_Om_s8_b1_b2_bs2_bn2_LR_stage1_encoder_nsf_latest/models/encoder/best.pth'
+
+  flow:
+    type: nsf             # or freia or nsf
+    num_transforms: 10
+    hidden_features: 128
+    num_bins: 8
+    dropout: 0.1
+    n_blocks: 8           # freia-only
+    n_nodes: 256          # freia-only
+    load: false
+    model_location: ''
+
+  data:
+    data_path: /projects/prjs1926/data/fli_data/fli_bias_LR/samples_dir/prior/
+    fiducial_path: /projects/prjs1926/data/fli_data/fli_fiducial_bias_LR/samples_dir/prior/
+    field_key: delta_biased
+    param_keys: [cosmo_params, bias_params]
+    all_param_names: [Omega_m, sigma_8, b1, b2, bs2, bn2]
+    active_params: [Omega_m, sigma_8, b1, b2, bs2, bn2]
+    val_split: 0.1
+    test_split: 0.1
+    n_realizations: null
+    log_transform: true
+
+  train:
+    train_network: flow
+    epochs: 500
+    batch_size: 32
+    lr: 0.00001
+    optimizer: AdamW
+    weight_decay: 0.01
+    scheduler: ReduceLROnPlateau
+    scheduler_params:
+      factor: 0.3
+      patience: 10
+      min_lr: 0.000001
+    gradient_accumulation_steps: 2
+    grad_clip: 400
+    patience: 25

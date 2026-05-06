@@ -1,19 +1,33 @@
 # virtual environment
 /venv
 
-#param cards
-/params/** 
-!/params/data.yaml
-!/params/train.yaml
-!/params/plot.yaml
+# param cards: gitignore everything in params/, then whitelist a curated set
+/params/**
+!/params/optuna_search.yaml
+!/params/optuna_best/
+!/params/optuna_best/**
+!/params/density_bias_train_stage1_encoder_maf.yaml
+!/params/density_bias_train_stage2_flow_maf.yaml
+!/params/density_bias_train_stage3_finetune_maf.yaml
+!/params/density_bias_plot_3stage_maf.yaml
+!/params/density_bias_train_stage1_encoder_nsf.yaml
+!/params/density_bias_train_stage2_flow_nsf.yaml
+!/params/density_bias_train_stage3_finetune_nsf.yaml
+!/params/density_bias_plot_3stage_nsf.yaml
+!/params/density_bias_train_stage1_encoder_freia.yaml
+!/params/density_bias_train_stage2_flow_freia.yaml
+!/params/density_bias_train_stage3_finetune_freia.yaml
+!/params/density_bias_plot_3stage_freia.yaml
+!/params/density_bias_train_stage1_encoder_maf_HR_both.yaml
+!/params/density_bias_train_stage2_flow_maf_HR_both.yaml
+!/params/density_bias_train_stage2_flow_maf_HR_both_resume.yaml
+!/params/density_bias_train_stage3_finetune_maf_HR_both.yaml
+!/params/density_bias_plot_3stage_maf_HR_both.yaml
 
+# egg file
+den_pie.egg-info
 
-#egg file
-twentyone_cm_pie.egg-info
-
-#output files
-
-# Ignore all output except the trained models for noise and simulations
+# output: ignore everything except the legacy paper checkpoints
 !output/
 output/*
 !output/best_sim/
@@ -22,20 +36,21 @@ output/best_sim/*
 output/best_noise/*
 !output/best_sim/models/
 !output/best_noise/models/
+output/optuna_*.db
 
-#  Animation files
-/animation
+# wandb experiment logs
+wandb/
 
-# cache from 21cmFAST
+# 21cmFAST cache
 /.cache
 
 # data
-/data/** 
+/data/**
 
 # tests
 /tests/**
 
-# python things
+# python
 __pycache__/
 **/__pycache__/
 *.pyc

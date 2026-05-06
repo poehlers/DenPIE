@@ -1,10 +1,10 @@
-<h2 align="center">Optimal, fast, and robust inference of reionization-era cosmology with the 21cmPIE-INN</h2>
+<h2 align="center">den_pie — Simulation-Based Inference on 21cm Density Fields</h2>
 
 <p align="center">
 <a href="https://arxiv.org/abs/2401.04174"><img alt="Arxiv" src="https://img.shields.io/badge/arXiv-2401.04174-b31b1b.svg"></a>
+</p>
 
-
-21cm_pie is a machine learning based tool for fast simulations-based inference from simulated 3D 21cm light cone data.  It contains modules to simulate and infer the posterior for a 6d parameter set. 
+`den_pie` is a machine-learning tool for simulation-based inference (SBI) of cosmological and bias parameters from 3D 21cm density fields. It pairs a 3D encoder (CNN or Swin Transformer) with a normalizing flow (MAF, NSF, or FrEIA) and trains the two in three stages: encoder alone, flow alone, then jointly fine-tuned end-to-end.
 
 <img src="animation/animation.gif" width="600" height="600" alt="Animation">
 
@@ -12,35 +12,38 @@
 
 ```sh
 # clone the repository
-git clone https://github.com/cosmostatistics/21cm_pie
-# then install in dev mode
-cd 21cm_pie
+git clone https://github.com/<TODO-org>/<TODO-repo>
+# install in editable mode
+cd den_pie
 pip install --editable .
 ```
 
 ## Usage
 
-Simulating data with [21cmFAST][21cmFAST] and adding noise with [21cmSense][21cmSense] :
+The full reference (CLI subcommands, YAML schema, output layout, and the recommended Optuna-driven workflow) lives in [`STRUCTURE.md`](STRUCTURE.md). A quick tour:
 
-[21cmFAST]: https://github.com/21cmfast/21cmFAST
-[21cmSense]: https://github.com/jpober/21cmSense
+**Hyperparameter search** — runs Optuna and exports the best-trial configs into `params/optuna_best/`:
+```
+python -m den_pie density-search params/optuna_search.yaml --verbose
+```
 
+**Train the three stages** (encoder → flow → joint fine-tune):
 ```
-twentyone_cm_pie data params/data.yaml --verbose
+python -m den_pie density-train params/optuna_best/optuna_best_cnn3d_maf_stage1_encoder.yaml --verbose
+python -m den_pie density-train params/optuna_best/optuna_best_cnn3d_maf_stage2_flow.yaml --verbose
+python -m den_pie density-train params/optuna_best/optuna_best_cnn3d_maf_stage3_finetune.yaml --verbose
 ```
-Training the model, typically done in three stages, first the 3D CNN, then the INN and finally both:
+
+**Evaluate** — produces posterior corner plots in `output/<run>/plots/`:
 ```
-twentyone_cm_pie train params/train.yaml --verbose
+python -m den_pie density-plot params/optuna_best/optuna_best_cnn3d_maf_stage3_finetune.yaml --verbose
 ```
-Analysing the performance and creating inference plots
-```
-twentyone_cm_pie plot params/plot.yaml --verbose
-```
-Trained networks for the inference of simulated (with and without noise) data are stored in ```output/```.
+
+Manual (non-HPO) param cards for the three flow variants live in `params/density_bias_train_stage{1,2,3}_{maf,nsf,freia}.yaml`. SLURM submission scripts for HPC systems are at the project root (`run_*.sh`).
 
 ## Acknowledgements
 
-If you use any part of this repository please cite the following paper:
+This package builds on the original 21cmPIE-INN work. If you use it, please cite:
 
 ```
 @article{Schosser:2024aic,
@@ -54,7 +57,7 @@ If you use any part of this repository please cite the following paper:
 }
 ```
 
-When using the 3D CNN please cite:
+When using the 3D CNN encoder please also cite:
 
 ```
 @ARTICLE{2022arXiv220107587N,
@@ -73,4 +76,3 @@ archivePrefix = {arXiv},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
 ```
-
