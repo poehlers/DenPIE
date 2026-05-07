@@ -4,7 +4,7 @@
 <a href="https://arxiv.org/abs/2401.04174"><img alt="Arxiv" src="https://img.shields.io/badge/arXiv-2401.04174-b31b1b.svg"></a>
 </p>
 
-`den_pie` is a machine-learning tool for simulation-based inference (SBI) of cosmological and bias parameters from 3D 21cm density fields. It pairs a 3D encoder (CNN or Swin Transformer) with a normalizing flow (MAF, NSF, or FrEIA) and trains the two in three stages: encoder alone, flow alone, then jointly fine-tuned end-to-end.
+`den_pie` is a machine-learning tool for simulation-based inference (SBI) of cosmological and bias parameters from 3D dark matter overdensity fields. It pairs a 3D encoder (CNN or Swin Transformer) with a normalizing flow (MAF, NSF, or FrEIA) and trains the two in three stages: encoder alone, flow alone, then jointly fine-tuned end-to-end.
 
 <img src="animation/animation.gif" width="600" height="600" alt="Animation">
 
