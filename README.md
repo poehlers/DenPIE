@@ -1,4 +1,4 @@
-<h2 align="center">den_pie — Simulation-Based Inference on Dark Matter Overdensity Fields</h2>
+<h2 align="center">DenPIE — Simulation-Based Inference on Dark Matter Overdensity Fields</h2>
 
 <!-- <p align="center">
 <a href="https://arxiv.org/abs/2401.04174"><img alt="Arxiv" src="https://img.shields.io/badge/arXiv-2401.04174-b31b1b.svg"></a>
