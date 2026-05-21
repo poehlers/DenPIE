@@ -13,7 +13,7 @@ spectra:
     k_max: null
 
   embedding:
-    type: mlp           # mlp | identity   (future: pca)
+    type: mlp           # mlp | none   (future: pca). Omit the block for none.
     embedding_dim: 64
     hidden: 256
 

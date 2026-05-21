@@ -44,9 +44,16 @@ class _Identity(nn.Module):
 
 
 def build_embedding(params: dict, input_dim: int) -> nn.Module:
-    """Factory: dispatches on params['spectra']['embedding']['type']."""
-    cfg = params['spectra'].get('embedding', {'type': 'identity'})
-    kind = cfg.get('type', 'identity')
+    """Factory: dispatches on params['spectra']['embedding']['type'].
+
+    If the `embedding` block is absent, or `type` is one of {'none', 'identity',
+    None}, the raw feature vector conditions the flow directly.
+    """
+    cfg = params['spectra'].get('embedding') or {}
+    kind = cfg.get('type', 'none')
+    if kind in (None, 'none', 'identity'):
+        logging.info(f"No embedding (pass-through): input_dim={input_dim}")
+        return _Identity(input_dim)
     if kind == 'mlp':
         emb = MLPEmbedding(
             input_dim=input_dim,
@@ -59,7 +66,4 @@ def build_embedding(params: dict, input_dim: int) -> nn.Module:
             f"embedding_dim={emb.embedding_dim}, params={n:,}"
         )
         return emb
-    if kind == 'identity':
-        logging.info(f"Identity embedding: input_dim={input_dim}")
-        return _Identity(input_dim)
     raise ValueError(f"Unknown embedding type: {kind}")
