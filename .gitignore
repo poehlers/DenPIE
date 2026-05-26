@@ -24,6 +24,7 @@
 !/params/density_bias_train_stage3_finetune_maf_HR_both.yaml
 !/params/density_bias_plot_3stage_maf_HR_both.yaml
 !/params/spectra_train_fli_bias_SN.yaml
+!/params/spectra_train_fli_bias_SN_PCA.yaml
 
 # egg file
 den_pie.egg-info

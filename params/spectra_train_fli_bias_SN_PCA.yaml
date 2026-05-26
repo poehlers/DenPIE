@@ -13,9 +13,8 @@ spectra:
     k_max: null
 
   embedding:
-    type: mlp           # mlp | pca | none. Omit the block for none.
+    type: pca           # mlp | pca | none. Omit the block for none.
     embedding_dim: 64
-    hidden: 256
 
   flow:
     type: maf           # maf | nsf

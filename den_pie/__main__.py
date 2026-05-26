@@ -174,7 +174,9 @@ def spectra_init(params: dict):
     data_loader = SpectraDataLoader(params)
     data = data_loader.data
 
-    embedding_net = build_embedding(params, input_dim=data['feature_dim'])
+    embedding_net = build_embedding(
+        params, input_dim=data['feature_dim'], x_train=data['x_train']
+    )
 
     # SBI needs sample tensors for shape inference.
     x_sample = data['x_train'][:2].to(device)

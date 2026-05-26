@@ -183,6 +183,35 @@ class SpectraPlotting:
                 logging.info(f"  corner plot for test sim {idx}")
         separator()
 
+    def fiducial_corner_plot(self):
+        """One corner plot per fiducial-cosmology simulation."""
+        norm_fid_data = self.data.get('norm_fid_data')
+        y_fiducial = self.data.get('y_fiducial')
+        if norm_fid_data is None or y_fiducial is None:
+            logging.warning("No fiducial data loaded, skipping fiducial corners")
+            return
+
+        n_plots = int(self.eval_cfg.get('n_corner_plots', 5))
+        sample_size = int(self.eval_cfg.get('num_samples', 1000))
+        n_plots = min(n_plots, norm_fid_data.shape[0])
+
+        save_dir = self.output_dir + 'fiducial_samples/'
+        os.makedirs(save_dir, exist_ok=True)
+        logging.info(f"Making {n_plots} fiducial corner plots...")
+
+        with PdfPages(self.output_dir + 'corner_fiducial.pdf') as pdf:
+            for idx in range(n_plots):
+                x_i = norm_fid_data[idx:idx + 1]
+                samples = self._sample_batch(x_i, sample_size)[0]
+                label = y_fiducial[idx].cpu().numpy()
+                np.savez(save_dir + f'fiducial_{idx}.npz',
+                         label=label, samples=samples)
+                fig = self._plot_corner(label, samples)
+                pdf.savefig(fig)
+                plt.close(fig)
+                logging.info(f"  fiducial corner plot {idx}")
+        separator()
+
     # ------------------------------------------------------------------ #
     #  TARP coverage
     # ------------------------------------------------------------------ #
@@ -282,8 +311,8 @@ class SpectraPlotting:
         logging.info(
             f"Running SBC ({n_sbc} sims, {n_post} posterior samples each)..."
         )
-        theta = y_test[:n_sbc]
-        xs = x_test[:n_sbc]
+        theta = y_test[:n_sbc].to(self.device)
+        xs = x_test[:n_sbc].to(self.device)
         ranks, _ = run_sbc(theta, xs, self.posterior,
                            num_posterior_samples=n_post)
         fig, _ = sbc_rank_plot(
@@ -303,6 +332,7 @@ class SpectraPlotting:
     def main(self):
         if self.eval_cfg.get('do_corner', True):
             self.corner_plot()
+            self.fiducial_corner_plot()
         if self.eval_cfg.get('do_tarp', True):
             self.tarp_plot()
         if self.eval_cfg.get('do_sbc', True):
