@@ -1,0 +1,27 @@
+den_pie — attribution
+======================
+
+This project combines two halves of a field-level forward-modelling +
+simulation-based inference (SBI) pipeline for cosmology:
+
+1. PyTorch / sbi inference code
+   (den_pie/density, den_pie/spectra, den_pie/util)
+   originates from the 21cmPIE-INN line of work; see README.md and setup.py.
+
+2. JAX forward model (den_pie/forward) and Fisher-forecast library
+   (den_pie/fisher), together with the Falcon dataset graphs and Fisher run
+   configs under config_files/, were ported from:
+
+       joint_fli_sbi — https://github.com/oleg-savchenko/joint_fli_sbi
+       (author: Oleg Savchenko and collaborators)
+
+   The code was copied and adapted on 2026-06-30: intra-package imports were
+   rewritten for the den_pie package layout (e.g. `from model.model import ...`
+   -> `from den_pie.forward.model import ...`), utils.py was relocated to
+   den_pie/forward/, and Falcon `_target_` paths were updated from
+   `core.model.*` to `den_pie.forward.*`. Scientific behaviour is unchanged.
+
+The upstream joint_fli_sbi repository did not ship an explicit LICENSE file at
+the time of porting. If one is added there, that license governs the ported
+code in den_pie/forward, den_pie/fisher, and config_files/. Please preserve this
+attribution.

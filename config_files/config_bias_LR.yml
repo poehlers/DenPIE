@@ -1,0 +1,144 @@
+paths:
+  import: .
+  graph: /projects/prjs1926/data/fli_data/fli_bias_base/graph
+logging: {}
+sample:
+  prior:
+    'n': 1000
+graph:
+  cosmo_params:
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+      - - uniform
+        - 0.1
+        - 0.5
+      - - uniform
+        - 0.6
+        - 1.0
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm
+        _input_:
+        - delta_biased
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+  bias_params:
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+      - - normal
+        - 1.0
+        - 0.5
+      - - normal
+        - 0.0
+        - 2.0
+      - - normal
+        - 0.0
+        - 2.0
+      - - normal
+        - 0.0
+        - 2.0
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm
+        _input_:
+        - delta_biased
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+  pk:
+    parents:
+    - cosmo_params
+    simulator:
+      _target_: den_pie.forward.PowerSpectrum
+      dim: 3
+      res: 64
+      boxsize: 1000.0
+      fixed_cosmo_params:
+        Omega_b: 0.049
+        h: 0.6711
+        n_s: 0.9624
+    ray:
+      num_gpus: 0
+  delta_ic:
+    parents:
+    - pk
+    simulator:
+      _target_: den_pie.forward.InitialConditions
+      dim: 3
+      res: 64
+      boxsize: 1000.0
+      run_dir: /projects/prjs1926/data/fli_data/fli_bias_base
+    ray:
+      num_gpus: 0
+  delta_biased:
+    parents:
+    - cosmo_params
+    - delta_ic
+    - bias_params
+    simulator:
+      _target_: den_pie.forward.model_bias.ForwardModelBias
+      dim: 3
+      res: 64
+      boxsize: 1000.0
+      sub_batch_size: 1
+      apply_rsd: true
+      los_axis: 2
+      fixed_cosmo_params:
+        Omega_b: 0.049
+        h: 0.6711
+        n_s: 0.9624
+      sim_params:
+        a_ini: 0.25
+        a_end: 1.0
+        stepper: bullfrog
+        method: pm
+        res_pm: 128
+        time_var: D
+        alpha: 1.5
+        theta: 0.5
+        antialias: 0
+        grad_kernel_order: 4
+        laplace_kernel_order: 0
+        n_resample: 1
+        n_steps: 1
+        deconvolve: false
+        nlpt_order_ics: 2
+        worder: 2
+    ray:
+      num_gpus: 1.0
+run_dir: /projects/prjs1926/data/fli_data/fli_bias_base

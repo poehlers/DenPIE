@@ -13,12 +13,35 @@ def main():
     Parses command line arguments and executes the corresponding function based on the subcommand.
 
     Usage:
-        python -m den_pie density-train  <paramcard> [--verbose]
-        python -m den_pie density-plot   <paramcard> [--verbose]
-        python -m den_pie density-search <paramcard> [--verbose]
+        python -m den_pie density-train   <paramcard> [--verbose]
+        python -m den_pie density-plot    <paramcard> [--verbose]
+        python -m den_pie density-search  <paramcard> [--verbose]
+        python -m den_pie spectra-train   <paramcard> [--verbose]
+        python -m den_pie spectra-plot    <paramcard> [--verbose]
+        python -m den_pie forward-sample  --config-name <falcon.yml> --run-dir <dir>
+        python -m den_pie fisher-forecast [--config <fisher.yml>] [...]
+        python -m den_pie fisher-compare  <fisher_run> <sbi_run> [--out <img>]
     """
+    import sys
 
-    parser = argparse.ArgumentParser()
+    # Delegating subcommands: forward this verb's remaining args verbatim to the
+    # underlying tool's own parser (the Falcon CLI and the Fisher runner each
+    # have large, independent flag sets). Intercept before argparse so those
+    # flags are never (mis)interpreted here.
+    if len(sys.argv) > 1 and sys.argv[1] == "forward-sample":
+        return forward_sample(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "fisher-forecast":
+        return fisher_forecast(sys.argv[2:])
+
+    parser = argparse.ArgumentParser(
+        prog="den_pie",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "delegating subcommands (run `<cmd> -h` for their own flags):\n"
+            "  forward-sample   -> `falcon sample prior ...`  (generate SBI training data)\n"
+            "  fisher-forecast  -> Fisher forecast from the JAX forward model\n"
+        ),
+    )
     subparsers = parser.add_subparsers(required=True)
 
     density_train_parser = subparsers.add_parser("density-train")
@@ -45,6 +68,24 @@ def main():
     spectra_plot_parser.add_argument("paramcard")
     spectra_plot_parser.add_argument("--verbose", action="store_true")
     spectra_plot_parser.set_defaults(func=spectra_plot)
+
+    fisher_compare_parser = subparsers.add_parser(
+        "fisher-compare",
+        help="Overlay a den_pie SBI posterior on a Fisher forecast corner.",
+    )
+    fisher_compare_parser.add_argument(
+        "fisher_run", help="Fisher run directory or path to fisher_results.npz")
+    fisher_compare_parser.add_argument(
+        "sbi_run", help="den_pie SBI run directory or path to a posterior .npz")
+    fisher_compare_parser.add_argument(
+        "--out", default=None,
+        help="Output image path (default: <fisher_run>/sbi_vs_fisher_corner.png)")
+    fisher_compare_parser.add_argument(
+        "--sbi-names", nargs="+", default=None,
+        help="Parameter names of the SBI sample columns, for name-based "
+             "alignment to the Fisher parameter order (default: assume same order)")
+    fisher_compare_parser.add_argument("--verbose", action="store_true")
+    fisher_compare_parser.set_defaults(func=fisher_compare)
 
     args = parser.parse_args()
     args.func(args)
@@ -240,6 +281,59 @@ def spectra_plot(args: argparse.Namespace) -> None:
 
     data, device, density_estimator = spectra_init(params)
     SpectraPlotting(params, density_estimator, data, device).main()
+
+
+# ---------------------------------------------------------------------------
+# Forward model + Fisher (ported from joint_fli_sbi; JAX stack)
+# ---------------------------------------------------------------------------
+
+def forward_sample(argv) -> None:
+    """Generate forward-model SBI training data via the Falcon CLI.
+
+    Thin pass-through: ``den_pie forward-sample <args>`` runs
+    ``falcon sample prior <args>``, mirroring the joint_fli_sbi data-generation
+    workflow, e.g.::
+
+        python -m den_pie forward-sample \\
+            --config-name config_files/config_base.yml --run-dir RUN_DIR
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    if shutil.which("falcon") is None:
+        print("ERROR: `falcon` CLI not found on PATH. Activate the unified env "
+              "(installs falcon-sbi); see scripts/make_unified_venv.sh.",
+              file=sys.stderr)
+        sys.exit(1)
+    cmd = ["falcon", "sample", "prior", *argv]
+    print("[den_pie] forward-sample ->", " ".join(cmd), file=sys.stderr)
+    sys.exit(subprocess.call(cmd))
+
+
+def fisher_forecast(argv) -> None:
+    """Run a Fisher forecast (delegates to den_pie.fisher.run_fisher.main)."""
+    from .fisher.run_fisher import main as run_fisher_main
+    run_fisher_main(argv)
+
+
+def fisher_compare(args: argparse.Namespace) -> None:
+    """Overlay a den_pie SBI posterior on a Fisher forecast corner."""
+    from .fisher.compare import compare_corner
+
+    out = args.out
+    if out is None:
+        base = args.fisher_run
+        if base.endswith('.npz'):
+            base = os.path.dirname(base)
+        out = os.path.join(base or '.', 'sbi_vs_fisher_corner.png')
+    out_dir = os.path.dirname(os.path.abspath(out))
+    init_logger(fn=out_dir, verbose=args.verbose)
+    logging.info(f'{socket.gethostname()}: fisher-compare starting')
+    logging.info(f'  fisher_run = {args.fisher_run}')
+    logging.info(f'  sbi_run    = {args.sbi_run}')
+    compare_corner(args.fisher_run, args.sbi_run, out, sbi_names=args.sbi_names)
+    logging.info(f'  wrote {out}')
 
 
 if __name__ == "__main__":

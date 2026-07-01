@@ -4,6 +4,8 @@ The embedding sits between the (already-vectorized) P+B feature input and the
 normalizing flow. Built via a factory so different branches (mlp, pca, none)
 plug in without touching the trainer.
 """
+from __future__ import annotations  # lazy annotations (e.g. `torch.Tensor | None`)
+
 import logging
 
 import torch
@@ -83,7 +85,14 @@ class PCAEmbedding(nn.Module):
         components = vh[: self.embedding_dim]
         var = (s ** 2) / max(centered.shape[0] - 1, 1)
         total = var.sum().clamp_min(1e-30)
-        ratio = (var[: self.embedding_dim] / total).to(torch.float32)
+        var_top = var[: self.embedding_dim]
+        ratio = (var_top / total).to(torch.float32)
+        # Whiten: divide each component by its PC std so the embedding output
+        # has ~unit variance per dim on the training set. Without this, the
+        # MAF conditioning sees wildly varying per-dim scales (eigenvalues
+        # span orders of magnitude) and trains poorly.
+        component_std = var_top.clamp_min(1e-8).sqrt()
+        components = components / component_std.unsqueeze(1)
         self.mean.copy_(mean.to(self.mean.dtype))
         self.components.copy_(components.to(self.components.dtype))
         self.explained_variance_ratio.copy_(ratio.to(self.explained_variance_ratio.dtype))

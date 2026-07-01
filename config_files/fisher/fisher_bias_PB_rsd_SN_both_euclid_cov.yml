@@ -1,0 +1,17 @@
+# Joint P_l + B Fisher with RSD multipoles + shot noise, both IC and FIN blocks.
+# res=128 + chunked jacrev to fit in memory.
+# Maps to my_py_gpu_job_fisher_bias_PB_rsd_SN_both.sh
+bias: true
+joint_pb: true
+field: fin
+pk_multipoles: True
+n_seeds: 20 #20
+n_cov_seeds: 2400
+pb_step: 2
+n_g_density: 1.0e-3
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_SN
+res: 128
+boxsize: 1000
+jacrev_chunk_size: 32
+derivative_method: autodiff
+cov_type: euclid_cov

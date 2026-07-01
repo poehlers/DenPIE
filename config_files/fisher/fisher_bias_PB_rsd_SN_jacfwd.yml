@@ -1,0 +1,19 @@
+# Bias Fisher (M1): 6 params [Omega_m, sigma_8, b1, b2, bs2, bn2], FINAL field only,
+# RSD multipoles P0/P2/P4 + B0, shot noise, full empirical covariance.
+# Zero bias fiducial (b1=1, b2=bs2=bn2=0) -- the fli_bias_SN dataset.
+# Derivative: jacfwd (forward-mode AD + x64) -> growth-complete Omega_m at
+# autodiff precision. Forward mode is cheap (cost ~ n_params), so no
+# jacrev_chunk_size needed.
+bias: true
+joint_pb: true
+field: fin
+pk_multipoles: True
+n_seeds: 20
+n_cov_seeds: 2400
+pb_step: 2
+n_g_density: 1.0e-3
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_SN
+res: 128
+boxsize: 1000
+derivative_method: jacfwd
+cov_type: euclid_cov

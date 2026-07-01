@@ -1,0 +1,20 @@
+# Fisher (Omega_m, sigma_8) on fli_2param, final field (RSD + shot noise).
+# Data vector: [P_0, P_2, P_4, B_0].
+# Covariance: block_with_pb_cross_empirical = analytic Grieb P_l-P_l' block +
+#   analytic Scoccimarro diagonal B block + EMPIRICAL P-B cross block. The cross
+#   block is sample-estimated (Hartlap-corrected at the joint-block dimension),
+#   so n_cov_seeds must exceed the block size + a margin.
+res:          128
+boxsize:      1000.0
+n_g_density:  1.0e-3
+pb_step:      3
+n_seeds:      10
+n_cov_seeds:  2400
+field: "fin"
+pk_multipoles: True
+joint_pb: True
+cov_type: block_with_pb_cross_empirical
+jacrev_chunk_size: 32
+
+# Forward-mode AD + x64: growth-complete Omega_m at autodiff precision.
+derivative_method: jacfwd

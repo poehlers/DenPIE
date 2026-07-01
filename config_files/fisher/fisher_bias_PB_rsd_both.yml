@@ -1,0 +1,9 @@
+# Joint P_l + B Fisher with RSD multipoles, both IC and FIN blocks. No shot noise.
+# Maps to my_py_gpu_job_fisher_bias_PB_rsd_both.sh
+bias: true
+joint_pb: true
+field: both
+pk_multipoles: true
+n_seeds: 3
+pb_step: 2
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_base

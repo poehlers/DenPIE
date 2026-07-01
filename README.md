@@ -1,49 +1,57 @@
-<h2 align="center">den_pie — Simulation-Based Inference on 21cm Density Fields</h2>
+<h2 align="center">den_pie — Forward model, Fisher forecasts & simulation-based inference for cosmology</h2>
 
 <p align="center">
+<a href="https://poehlers.github.io/DenPIE/"><img alt="Docs" src="https://img.shields.io/badge/docs-poehlers.github.io%2FDenPIE-blue.svg"></a>
 <a href="https://arxiv.org/abs/2401.04174"><img alt="Arxiv" src="https://img.shields.io/badge/arXiv-2401.04174-b31b1b.svg"></a>
 </p>
 
-`den_pie` is a machine-learning tool for simulation-based inference (SBI) of cosmological and bias parameters from 3D 21cm density fields. It pairs a 3D encoder (CNN or Swin Transformer) with a normalizing flow (MAF, NSF, or FrEIA) and trains the two in three stages: encoder alone, flow alone, then jointly fine-tuned end-to-end.
+`den_pie` is a field-level cosmology toolkit that unifies three things in one package:
 
-<img src="animation/animation.gif" width="600" height="600" alt="Animation">
+- a **differentiable JAX forward model** (`den_pie.forward`) mapping cosmological + Lagrangian-bias parameters to density fields and their summaries ($P_{0,2,4}(k)$ + $B_0$), built on DiscoDJ + BFast + Falcon;
+- a **Fisher-forecast library** (`den_pie.fisher`) that differentiates the forward model for Gaussian parameter constraints; and
+- **neural simulation-based inference** (`den_pie.density`, `den_pie.spectra`): 3D field encoders (CNN / Swin / ResNet) and $P$+$B$ summary embeddings paired with normalizing flows (MAF / NSF / FrEIA) via the `sbi` library — with a built-in SBI-vs-Fisher corner overlay.
+
+📖 **Documentation & the full pipeline diagram: https://poehlers.github.io/DenPIE/**
+
+This repository merges the SBI pipeline (`den_pie`) with the forward-model + Fisher code from `joint_fli_sbi`; see [`NOTICE`](NOTICE) for attribution.
 
 ## Installation
 
+den_pie spans two GPU stacks (PyTorch for SBI, JAX for the forward model + Fisher) that coexist in one environment:
+
 ```sh
-# clone the repository
-git clone https://github.com/<TODO-org>/<TODO-repo>
-# install in editable mode
-cd den_pie
-pip install --editable .
+git clone https://github.com/poehlers/DenPIE
+cd DenPIE
+# unified env — build on a GPU node with FFTW + a compiler (see docs/installation)
+bash scripts/make_unified_venv.sh /path/to/denpievenv
+source /path/to/denpievenv/bin/activate
 ```
+
+For just the SBI half: `pip install -e .` · add the forward/Fisher half: `pip install -e ".[forward]"`.
 
 ## Usage
 
-The full reference (CLI subcommands, YAML schema, output layout, and the recommended Optuna-driven workflow) lives in [`STRUCTURE.md`](STRUCTURE.md). A quick tour:
+The full reference (CLI, YAML schema, methodology) is on the [documentation site](https://poehlers.github.io/DenPIE/); [`STRUCTURE.md`](STRUCTURE.md) covers the density Optuna workflow in depth. Quick tour:
 
-**Hyperparameter search** — runs Optuna and exports the best-trial configs into `params/optuna_best/`:
-```
-python -m den_pie density-search params/optuna_search.yaml --verbose
-```
-
-**Train the three stages** (encoder → flow → joint fine-tune):
-```
-python -m den_pie density-train params/optuna_best/optuna_best_cnn3d_maf_stage1_encoder.yaml --verbose
-python -m den_pie density-train params/optuna_best/optuna_best_cnn3d_maf_stage2_flow.yaml --verbose
-python -m den_pie density-train params/optuna_best/optuna_best_cnn3d_maf_stage3_finetune.yaml --verbose
-```
-
-**Evaluate** — produces posterior corner plots in `output/<run>/plots/`:
-```
-python -m den_pie density-plot params/optuna_best/optuna_best_cnn3d_maf_stage3_finetune.yaml --verbose
+```sh
+# forward model — generate SBI training data (Falcon)
+python -m den_pie forward-sample --config-name config_files/config_base.yml --run-dir RUN_DIR
+# Fisher forecast
+python -m den_pie fisher-forecast --config config_files/fisher/fisher_5param_P024_B0_emp.yml
+# neural SBI (P+B summaries, or the raw 3D field)
+python -m den_pie spectra-train  params/spectra_train_fli_bias_SN_PCA.yaml
+python -m den_pie density-train   params/optuna_best/optuna_best_cnn3d_maf_stage3_finetune.yaml
+# overlay the SBI posterior on the Fisher forecast
+python -m den_pie fisher-compare  <fisher_run> <sbi_run> --out sbi_vs_fisher.png
 ```
 
-Manual (non-HPO) param cards for the three flow variants live in `params/density_bias_train_stage{1,2,3}_{maf,nsf,freia}.yaml`. SLURM submission scripts for HPC systems are at the project root (`run_*.sh`).
+Smoke-test the install with `bash scripts/smoke_test.sh`. SLURM submission scripts live in `scripts/`.
 
 ## Acknowledgements
 
-This package builds on the original 21cmPIE-INN work. If you use it, please cite:
+The SBI pipeline builds on the original 21cmPIE-INN work; the forward model and
+Fisher library were ported from [`joint_fli_sbi`](https://github.com/oleg-savchenko/joint_fli_sbi)
+(O. Savchenko *et al.*) — see [`NOTICE`](NOTICE). If you use this package, please cite:
 
 ```
 @article{Schosser:2024aic,

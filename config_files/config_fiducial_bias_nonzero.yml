@@ -1,0 +1,143 @@
+# Falcon configuration — Fiducial biased tracer with shot noise + P_l/B_0
+#                          (higher-order bias fixed to b=1)
+#
+# Companion fiducial set for config_bias_nonzero.yml. Same as
+# config_fiducial_bias_SN.yml except the higher-order bias is fixed to 1:
+#   1. δ_biased gets per-voxel Gaussian shot noise with variance 1/N̄_g,
+#      n̄_g = 1e-3 (h/Mpc)⁻³ (DESI-like, arXiv:2504.20130v2).
+#   2. Four new summary nodes: P_l (l=0,2,4) and B_0 of both δ_ic and the
+#      noisy δ_biased via BFast (mirroring SBI_Pk's calls).
+#
+# Cosmology fixed to Quijote/Planck 2018 fiducial.
+# Bias fixed (b1=1, b2=bs2=bn2=1 → matches the non-zero prior means).
+# Only random ICs and shot-noise realisations vary across samples.
+# RSD enabled (los_axis=2).
+
+paths:
+  import: "."
+  graph:  "${run_dir}/graph"
+
+# Forwarded to ray.init(**cfg.ray.init) by Falcon (falcon/cli.py:641).
+# Disable the dashboard subprocess: it is the dominant cost on Snellius
+# nodes and the most common cause of the 30-s Ray-init timeout (the
+# timeout is hard-coded in ray/_private/node.py:365 — no env var raises it).
+ray:
+  init:
+    include_dashboard: false
+
+logging: {}
+
+sample:
+  prior:
+    n: 100
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Fiducial P(k) (root node) ──────────────────────────────────────
+  pk:
+    simulator:
+      _target_: den_pie.forward.model_minimal.FixedPowerSpectrum
+      dim:     3
+      res:     128
+      boxsize: 1000.0
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Gaussian-random initial conditions (root node) ─────────────────
+  delta_ic:
+    simulator:
+      _target_: den_pie.forward.model_minimal.InitialConditions
+      dim:            3
+      res:            128
+      boxsize:        1000.0
+      sub_batch_size: 1
+      run_dir:        ${run_dir}
+    ray:
+      num_gpus: 0
+
+  # ── Node 3: Biased tracer with shot noise (fixed cosmo + fixed bias + ε) ───
+  delta_biased:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.model_minimal.FixedForwardModelBias
+      dim:            3
+      res:            128
+      boxsize:        1000.0
+      sub_batch_size: 1
+      apply_rsd:      true
+      los_axis:       2
+      fiducial_bias_params:
+        b1:  1.0
+        b2:  1.0
+        bs2: 1.0
+        bn2: 1.0
+      n_g_density: 1.0e-3       # (h/Mpc)⁻³; DESI-like (arXiv:2504.20130v2)
+      run_dir:     ${run_dir}   # deterministic per-sample SN seed
+      sim_params:
+        a_ini:                0.25
+        a_end:                1.00
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               256
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 0.5     # leaves 0.5 GPU for the 4 BFast summary actors
+
+  # ── Node 4: P_l(k) multipoles of the IC field ──────────────────────────────
+  pk_l_ic:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.PkMultipoles
+      boxsize:   1000.0
+      res:       128
+      los_axis:  2
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 5: P_l(k) multipoles of the noisy biased field ────────────────────
+  pk_l_fin:
+    parents: [delta_biased]
+    simulator:
+      _target_: den_pie.forward.PkMultipoles
+      boxsize:   1000.0
+      res:       128
+      los_axis:  2
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 6: B_0 bispectrum monopole of the IC field ────────────────────────
+  bk_0_ic:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.BkMonopole
+      boxsize:   1000.0
+      res:       128
+      dk_kF:     3
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 7: B_0 bispectrum monopole of the noisy biased field ──────────────
+  bk_0_fin:
+    parents: [delta_biased]
+    simulator:
+      _target_: den_pie.forward.BkMonopole
+      boxsize:   1000.0
+      res:       128
+      dk_kF:     3
+      mas_order: 0
+    ray:
+      num_gpus: 0.1

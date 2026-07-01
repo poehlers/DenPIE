@@ -49,10 +49,19 @@ wandb/
 # data
 /data/**
 
-# tests
+# tests: ignore scratch tests, keep the committed smoke test
 /tests/**
+!/tests/test_smoke.py
 
 # python
 __pycache__/
 **/__pycache__/
 *.pyc
+.pytest_cache/
+
+# docs build output + LaTeX figure intermediates (rendered png/pdf + sources are kept)
+docs/_build/
+docs/_figures/forward_model/body.tex
+docs/_figures/forward_model/wrapper.pdf
+docs/_figures/forward_model/*.aux
+docs/_figures/forward_model/*.log

@@ -1,0 +1,23 @@
+# Bias-nonzero Fisher (M3): 6 params [Omega_m, sigma_8, b1, b2, bs2, bn2], FINAL
+# field only, RSD multipoles P0/P2/P4 + B0, shot noise, full empirical covariance.
+# NONZERO bias fiducial (b1=b2=bs2=bn2=1.0) -- matches the fli_bias_nonzero
+# dataset / config_fiducial_bias_nonzero.yml, complementing the density-field
+# SBI run density_bias_..._both_nonzero_20260618_113901.
+# Derivative: jacfwd (forward-mode AD + x64) -> growth-complete Omega_m.
+bias: true
+joint_pb: true
+field: fin
+pk_multipoles: True
+n_seeds: 20
+n_cov_seeds: 2400
+pb_step: 2
+n_g_density: 1.0e-3
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_nonzero
+res: 128
+boxsize: 1000
+derivative_method: jacfwd
+cov_type: euclid_cov
+fid_b1: 1.0
+fid_b2: 1.0
+fid_bs2: 1.0
+fid_bn2: 1.0

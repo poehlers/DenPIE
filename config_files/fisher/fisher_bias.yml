@@ -1,0 +1,6 @@
+# Biased-tracer Fisher (joint cosmo + bias) on P(delta_biased) — no PB, no RSD.
+# Maps to my_py_gpu_job_fisher_bias.sh
+bias: true
+n_seeds: 10
+n_bins: 30
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_base

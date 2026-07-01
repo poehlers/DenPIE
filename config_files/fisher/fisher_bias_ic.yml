@@ -1,0 +1,6 @@
+# Biased-tracer Fisher on the Lagrangian field P(delta_L = w(q) - 1).
+# Maps to my_py_gpu_job_fisher_bias_ic.sh
+bias: true
+field: ic
+n_seeds: 10
+n_bins: 30

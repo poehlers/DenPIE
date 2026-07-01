@@ -1,0 +1,15 @@
+# Fisher (Omega_m, sigma_8) on fli_2param, final field (RSD + shot noise).
+# Data vector: [P_0, P_2, P_4].  Covariance: analytic Gaussian (diag).
+#   diag = full Grieb+2016 P_l-P_l' multipole covariance. No empirical sims,
+#          so n_cov_seeds is nominal/unused.
+res:          128
+boxsize:      1000.0
+n_g_density:  1.0e-3
+pb_step:      3
+n_seeds:      10
+n_cov_seeds:  50
+field: "fin"
+pk_multipoles: True
+joint_pb: False
+cov_type: diag
+jacrev_chunk_size: 32

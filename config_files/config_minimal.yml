@@ -1,0 +1,69 @@
+# Falcon configuration — Minimal fixed-cosmology forward model with DiscoDJ
+#
+# Pipeline DAG:
+#
+#   delta_ic ──► delta_fin
+#
+# Cosmology is fixed to the Quijote fiducial throughout.  P(k) is computed
+# once at actor init time and never recomputed.
+#
+# Run with:
+#   falcon sample prior --config-name config_files/config_minimal.yml --run-dir outputs/minimal_run
+
+paths:
+  import: "."
+  graph:  "${run_dir}/graph"
+
+logging: {}
+
+sample:
+  prior:
+    n: 1                             # number of forward simulations to generate
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Gaussian-random initial conditions (root node) ─────────────────
+  # Fixed Quijote fiducial cosmology. P(k) pre-computed once at actor init.
+  delta_ic:
+    simulator:
+      _target_: den_pie.forward.model_minimal.InitialConditions
+      dim:            3
+      res:            64
+      boxsize:        1000.0       # Mpc/h
+      sub_batch_size: 1            # reduce if memory-constrained; must divide sample n
+      run_dir:        ${run_dir}   # used to count existing samples → seed offset per chunk
+    ray:
+      num_gpus: 0                  # runs on CPU — no GPU allocation needed
+
+  # ── Node 2: N-body forward simulation (PM, bullfrog stepper, z=3 → z=0) ───
+  # Fixed Quijote fiducial cosmology. No cosmo_params input needed.
+  delta_fin:
+    parents: [delta_ic]
+    # observed: "./data/observed.npz['delta_fin']"  # ← uncomment when you have real data
+    # evidence: [delta_fin]  # (on delta_ic node) — uncomment to train p(δ_IC | δ_fin)
+    simulator:
+      _target_: den_pie.forward.model_minimal.ForwardModel
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1            # reduce if GPU OOM; must divide sample n
+      sim_params:
+        a_ini:                0.25    # z ≈ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               128     # 2 × res
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 1.0

@@ -1,0 +1,80 @@
+# Falcon configuration — Fiducial fixed-cosmology forward model, P(k) output
+#
+# Pipeline DAG:
+#
+#   pk (FixedPowerSpectrum) ─────────────────────── stored per sample
+#   delta_ic ──────────────────────────────────────► pk_measured
+#
+# Cosmology is fixed to the Quijote/Planck 2018 fiducial throughout.
+# P(k) is identical for every sample; delta_ic varies (random ICs).
+# The final node outputs measured nonlinear P(k) via Pylians instead of
+# the raw density field.
+#
+# Run with:
+#   falcon sample prior --config-name config_files/config_fiducial_pk.yml --run-dir outputs/fiducial_pk_run
+
+paths:
+  import: "."
+  graph:  "${run_dir}/graph"
+
+logging: {}
+
+sample:
+  prior:
+    n: 1000
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Fiducial P(k) (root node) ──────────────────────────────────────
+  pk:
+    simulator:
+      _target_: den_pie.forward.model_minimal.FixedPowerSpectrum
+      dim:     3
+      res:     64
+      boxsize: 1000.0   # Mpc/h
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Gaussian-random initial conditions (root node) ─────────────────
+  delta_ic:
+    simulator:
+      _target_: den_pie.forward.model_minimal.InitialConditions
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1
+      run_dir:        ${run_dir}
+    ray:
+      num_gpus: 0
+
+  # ── Node 3: N-body → measured P(k) via Pylians ─────────────────────────────
+  pk_measured:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.model_minimal.ForwardModelPk
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1
+      mas:            'None'
+      pk_threads:     4
+      sim_params:
+        a_ini:                0.25    # z ≈ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               128     # 2 × res=64
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 1.0
