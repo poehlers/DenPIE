@@ -1,0 +1,82 @@
+# Falcon configuration — Fiducial fixed-cosmology forward model at res=128³
+#
+# Pipeline DAG:
+#
+#   pk (FixedPowerSpectrum) ─────────────────────── stored per sample
+#   delta_ic ──────────────────────────────────────► delta_fin
+#
+# Cosmology is fixed to the Quijote/Planck 2018 fiducial throughout.
+# P(k) is identical for every sample; delta_ic and delta_fin are unique.
+#
+# Run 10 chunks of 100 to get 1000 total fiducial simulations:
+#   RUN_DIR="/projects/prjs1926/data/fli_data/fiducial_run_$(date +%y%m%d_%H%M%S)"
+#   for i in $(seq 1 10); do
+#       falcon sample prior --config-name config_files/config_fiducial_128.yml --run-dir "${RUN_DIR}"
+#   done
+
+paths:
+  import: "."
+  graph:  "${run_dir}/graph"
+
+logging: {}
+
+sample:
+  prior:
+    n: 100    # 100 sims per chunk × 10 chunks = 1000 total
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Fiducial P(k) (root node) ──────────────────────────────────────
+  # Computed once at actor init; returned identically for every sample.
+  pk:
+    simulator:
+      _target_: den_pie.forward.model_minimal.FixedPowerSpectrum
+      dim:     3
+      res:     128
+      boxsize: 1000.0   # Mpc/h
+    ray:
+      num_gpus: 0       # CPU only
+
+  # ── Node 2: Gaussian-random initial conditions (root node) ─────────────────
+  # Fixed Quijote fiducial cosmology. P(k) pre-computed once at actor init.
+  delta_ic:
+    simulator:
+      _target_: den_pie.forward.model_minimal.InitialConditions
+      dim:            3
+      res:            128
+      boxsize:        1000.0
+      sub_batch_size: 1
+      run_dir:        ${run_dir}
+    ray:
+      num_gpus: 0
+
+  # ── Node 3: N-body forward simulation (PM, bullfrog, z=3 → z=0) ────────────
+  # Fixed Quijote fiducial cosmology. res_pm=256 (2× res=128).
+  delta_fin:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.model_minimal.ForwardModel
+      dim:            3
+      res:            128
+      boxsize:        1000.0
+      sub_batch_size: 1
+      sim_params:
+        a_ini:                0.25    # z ≈ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               256     # 2 × res=128
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 1.0

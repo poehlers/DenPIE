@@ -1,0 +1,22 @@
+% Auto-render wrapper for forward_model_V3.tex on TeX installs that lack the
+% `standalone` class (e.g. the TeX Live 2020 system install on Snellius).
+% It reproduces standalone's cropping closely enough for the docs hero image:
+% the figure is ~17.3cm x 22cm at the original \resizebox{!}{22cm}, so a tight
+% 18cm x 23cm page renders to a near-flush PNG via ghostscript (see build.sh).
+% The scientific figure itself is unchanged — body.tex is extracted verbatim
+% from forward_model_V3.tex between \begin{document} and \end{document}.
+\documentclass{article}
+\usepackage[paperwidth=18cm,paperheight=23cm,margin=2mm]{geometry}
+% Pass dvipsnames to xcolor BEFORE tikz loads xcolor (avoids an option clash).
+\PassOptionsToPackage{dvipsnames}{xcolor}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usetikzlibrary{shapes.geometric, positioning, arrows.meta, calc}
+\usepackage{graphicx}
+\pagestyle{empty}
+\begin{document}%
+\noindent
+\input{body.tex}%
+\end{document}

@@ -1,0 +1,157 @@
+# Falcon configuration — Biased tracer forward model with DiscoDJ
+#
+# Pipeline DAG:
+#
+#   cosmo_params  ─────────────────────────────────┐
+#        │                                         ▼
+#        ▼                                  delta_fin ◄── bias_params
+#       pk ──► delta_ic ───────────────────────────┘
+#
+# delta_fin is produced by an N-body PM simulation + second-order Lagrangian
+# bias (Modi+2020) + optional RSD.  Bias parameters [b₁, b₂, bs², bn²] are
+# sampled as a Falcon prior node, enabling joint inference of cosmology and bias.
+#
+# Run with:
+#   falcon sample prior --config-name config_files/config_bias.yml --run-dir outputs/bias_run
+
+paths:
+  import: "."                        # adds repo root to sys.path
+  graph:  "${run_dir}/graph"
+
+logging: {}
+
+sample:
+  prior:
+    n: 1                             # number of forward simulations per call
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Cosmological parameters ────────────────────────────────────────
+  # Uniform prior over the 5-parameter ΛCDM space (Quijote simulation ranges).
+  cosmo_params:
+    # evidence: [delta_fin]    # uncomment for p(θ_cosmo | δ_fin) inference
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+        - ['uniform', 0.10, 0.50]   # Ω_m  (total matter density)
+        - ['uniform', 0.03, 0.07]   # Ω_b  (baryon density)
+        - ['uniform', 0.50, 0.90]   # h    (dimensionless Hubble constant)
+        - ['uniform', 0.80, 1.20]   # n_s  (scalar spectral index)
+        - ['uniform', 0.60, 1.00]   # σ_8  (matter power amplitude)
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm    # replace with 3D CNN embedding
+        _input_: [delta_fin]
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Bias parameters ─────────────────────────────────────────────────
+  # Uniform prior over the 4 second-order Lagrangian bias parameters.
+  # Ranges are physically motivated placeholders — adjust for your tracer.
+  bias_params:
+    # evidence: [delta_fin]    # uncomment for p(b | δ_fin) inference
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+        - ['normal',  1.0,  0.5]    # b₁   (linear bias — positive for typical tracers)
+        - ['normal',  0.0,  2.0]    # b₂   (quadratic bias)
+        - ['normal',  0.0,  2.0]    # bs²  (tidal shear bias)
+        - ['normal',  0.0,  2.0]    # bn²  (Laplacian bias)
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm
+        _input_: [delta_fin]
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+
+  # ── Node 3: Linear matter power spectrum P(k) ──────────────────────────────
+  pk:
+    parents: [cosmo_params]
+    simulator:
+      _target_: den_pie.forward.PowerSpectrum
+      dim:     3
+      res:     64
+      boxsize: 1000.0       # Mpc/h
+    ray:
+      num_gpus: 0
+
+  # ── Node 4: Gaussian-random initial conditions ──────────────────────────────
+  delta_ic:
+    parents: [pk]
+    # evidence: [delta_fin]    # uncomment for p(δ_IC | δ_fin) inference
+    simulator:
+      _target_: den_pie.forward.InitialConditions
+      dim:     3
+      res:     64
+      boxsize: 1000.0
+      run_dir: ${run_dir}     # used to count existing samples → seed offset per chunk
+    ray:
+      num_gpus: 0
+
+  # ── Node 5: Biased tracer (N-body + Lagrangian bias + optional RSD) ─────────
+  # Parents order matches simulate_batch(batch_size, cosmo_params, delta_ic, bias_params).
+  delta_fin:
+    parents: [cosmo_params, delta_ic, bias_params]
+    # observed: "./data/observed_biased.npz['delta_fin']"  # ← uncomment for real data
+    simulator:
+      _target_: den_pie.forward.model_bias.ForwardModelBias
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1            # must divide sample.prior.n; increase for GPU speedup
+      apply_rsd:      true         # set true to include Kaiser RSD along los_axis
+      los_axis:       2            # line-of-sight axis: 0=x, 1=y, 2=z
+      sim_params:
+        a_ini:                0.25    # z ≈ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               128     # 2 × res
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 1.0

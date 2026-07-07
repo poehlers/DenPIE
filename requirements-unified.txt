@@ -1,0 +1,41 @@
+# Unified dependency set for den_pie — BOTH halves of the pipeline in ONE venv:
+#   * PyTorch SBI inference   (den_pie/density, den_pie/spectra)
+#   * JAX forward model + Fisher (den_pie/forward, den_pie/fisher)
+#
+# Both source venvs (flivenv, 21cmvenv) are Python 3.13.1 and share the SAME
+# nvidia-cu12 CUDA 12.8 wheels; flivenv already runs torch 2.10.0 and jax 0.9.1
+# side by side, so this union is internally consistent.
+#
+# These are the TOP-LEVEL pins (transitive deps are resolved by pip). Prefer
+# `scripts/make_unified_venv.sh`, which installs torch (cu128 index) and JAX in
+# the right order — `pip install -r` alone cannot express the per-package index
+# URL the +cu128 torch wheels need. For an exact lock, run
+# `pip freeze > requirements-lock.txt` after building.
+
+# --- PyTorch SBI inference half ---
+# NOTE: install torch/vision/audio from the CUDA 12.8 index:
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0
+torch==2.10.0
+torchvision==0.25.0
+torchaudio==2.10.0
+sbi==0.26.1
+nflows==0.14
+FrEIA==0.2
+getdist==1.7.6
+optuna==4.8.0
+tarp  # TARP coverage diagnostics (den_pie/{spectra,density}/eval.py)
+
+# --- JAX differentiable forward-model + Fisher half ---
+jax[cuda12]==0.9.1
+jaxtyping==0.3.9
+discodj @ git+https://github.com/cosmo-sims/DISCO-DJ.git@e066802913293b590372c3e5031a694e8819cfa6
+BFast @ git+https://github.com/tsfloss/BFast.git@5edeb5c7d4395ca67ddab7b14d5f781c10332ec1
+Pylians @ git+https://github.com/franciscovillaescusa/Pylians3.git@5bfaf0006a80a2aa2f0f33f309d68b7ac3172b2d
+classy==3.3.4.0
+falcon-sbi==0.3.0
+
+# --- shared ---
+numpy>=2.4,<2.5
+scipy==1.17.1
+pyyaml
+matplotlib

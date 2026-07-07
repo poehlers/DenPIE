@@ -1,0 +1,35 @@
+# Fisher forecast for (Omega_m, sigma_8) on the fli_2param observable,
+# MONOPOLE-ONLY variant:
+#   data vector = [P_0] of the redshift-space (los=2), shot-noised matter final
+#   field. Pure matter (no bias) — only Omega_m and sigma_8 vary.
+#   Covariance is empirical (Hartlap-corrected) from n_cov_seeds fiducial sims.
+#
+# The data vector is controlled by the switches below:
+#   field:         only 'fin' (final redshift-space field) is supported.
+#   pk_multipoles: False -> keep only P_0 (no P_2/P_4).
+#   joint_pb:      False -> drop the bispectrum B_0.
+# (Both True reproduce the full [P_0, P_2, P_4, B_0] of fisher_2param.yml.)
+#
+# Maps to my_py_gpu_job_fisher_2param.sh. Override on the CLI, e.g.
+#   python core/fisher_2param.py --config config_files/fisher/fisher_2param_P_0.yml --n-seeds 5
+#
+# NOTE: empirical covariance needs n_cov_seeds > n_data + 2, where
+#   n_data = n_P_bins (P_0 only) grows with res and shrinks with pb_step.
+#   At res=128, pb_step=3 n_data is small, so n_cov_seeds=600 is plenty.
+res:          128
+boxsize:      1000.0
+n_g_density:  1.0e-3
+pb_step:      3
+n_seeds:      10
+n_cov_seeds:  600
+field: "fin"
+pk_multipoles: False   # P_0 only (no P_2/P_4)
+joint_pb: False        # no bispectrum B_0
+
+# jax.jacrev of the R^2 -> R^n_data pipeline builds the Jacobian as
+# vmap(pullback)(I_n_data) = n_data simultaneous reverse passes through the
+# N-body + bispectrum, which OOMs a 40GB A100 at res=128. Chunk it: sweep the
+# output-basis cotangents through jax.lax.map in batches of this size (bounds
+# peak memory to ~chunk_size reverse passes; bit-identical to jax.jacrev).
+# 16 is safe with headroom; raise (e.g. 32) for speed, lower if it still OOMs.
+jacrev_chunk_size: 32

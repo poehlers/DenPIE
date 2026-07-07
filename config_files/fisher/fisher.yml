@@ -1,0 +1,5 @@
+# Plain 5-param Fisher forecast on P(delta_fin) — no bias, no joint PB, no RSD.
+# Maps to my_py_gpu_job_fisher.sh
+n_seeds: 10
+n_bins: 30
+sbi_samples: /projects/prjs1926/data/fli_data/fli_5param

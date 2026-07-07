@@ -1,0 +1,122 @@
+# Falcon configuration — Cosmological N-body forward model with DiscoDJ
+#
+# Pipeline DAG:
+#
+#   cosmo_params ─────────────────────────────────────┐
+#        │                                            ▼
+#        ▼                                      delta_fin
+#       pk ──► delta_ic ────────────────────────────┘
+#
+# Noise is NOT stored — add on-the-fly in the training dataloader:
+#   x_obs = delta_fin + sigma * torch.randn_like(delta_fin)
+#
+# Run with:
+#   falcon launch --config-name config_files/config.yml --run-dir outputs/run_01
+
+paths:
+  import: "."                        # adds repo root to sys.path → "den_pie.forward.X" resolves to ./core/model/
+  graph:  "${run_dir}/graph"         # where model checkpoints / logs are stored
+
+logging: {}                          # required by Falcon CLI even when empty
+
+sample:
+  prior:
+    n: 1                             # number of forward simulations to generate
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Cosmological parameters ────────────────────────────────────────
+  # Uniform prior over the 5-parameter ΛCDM space (Quijote simulation ranges).
+  # Posterior: p(θ | δ_fin)  — uncomment `evidence:` and `observed:` in delta_fin to train.
+  cosmo_params:
+    # evidence: [delta_fin]    # uncomment when doing inference (requires observed: in delta_fin)
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+        - ['uniform', 0.10, 0.50]   # Ω_m  (total matter density)
+        - ['uniform', 0.03, 0.07]   # Ω_b  (baryon density)
+        - ['uniform', 0.50, 0.90]   # h    (dimensionless Hubble constant)
+        - ['uniform', 0.80, 1.20]   # n_s  (scalar spectral index)
+        - ['uniform', 0.60, 1.00]   # σ_8  (matter power amplitude)
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm    # placeholder — replace with a
+        _input_: [delta_fin]                          # 3D CNN or summary-statistic embedding
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Linear matter power spectrum P(k) ──────────────────────────────
+  pk:
+    parents: [cosmo_params]
+    simulator:
+      _target_: den_pie.forward.PowerSpectrum
+      dim:     3
+      res:     64
+      boxsize: 1000.0       # Mpc/h
+    ray:
+      num_gpus: 0             # runs on CPU — no GPU allocation needed
+
+  # ── Node 3: Gaussian-random initial conditions ──────────────────────────────
+  # Posterior: p(δ_IC | δ_fin)  — uncomment `evidence:` and `observed:` in delta_fin to train.
+  delta_ic:
+    parents: [pk]
+    # evidence: [delta_fin]    # uncomment when doing inference (requires observed: in delta_fin)
+    # estimator:               # replace with an appropriate high-dimensional estimator, e.g.:
+    #   _target_: falcon.estimators.ScoreModel
+    #   ...
+    simulator:
+      _target_: den_pie.forward.InitialConditions
+      dim:     3
+      res:     64
+      boxsize: 1000.0
+      run_dir: ${run_dir}     # used to count existing samples → seed offset per chunk
+    ray:
+      num_gpus: 0             # runs on CPU — no GPU allocation needed
+
+  # ── Node 4: N-body forward simulation (PM, bullfrog stepper, z=3 → z=0) ───
+  delta_fin:
+    parents: [cosmo_params, delta_ic]   # order must match simulate_batch signature
+    # observed: "./data/observed.npz['delta_fin']"  # ← uncomment when you have real data
+    simulator:
+      _target_: den_pie.forward.ForwardModel
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1       # reduce if GPU OOM; must divide the Falcon batch size
+      sim_params:
+        a_ini:                0.25    # z ≈ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               128     # 2 × res
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 1.0

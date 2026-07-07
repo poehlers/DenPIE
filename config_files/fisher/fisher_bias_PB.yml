@@ -1,0 +1,7 @@
+# Joint P(k) + B(k1,k2,k3) Fisher (monopole, no RSD, no shot noise).
+# Maps to my_py_gpu_job_fisher_bias_PB.sh
+bias: true
+joint_pb: true
+n_seeds: 3
+pb_step: 2
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_base

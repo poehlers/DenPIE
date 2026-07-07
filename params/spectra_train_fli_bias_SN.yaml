@@ -1,0 +1,48 @@
+name: spectra_fli_bias_SN_P024_B0
+
+spectra:
+  data:
+    dataset: fli_bias_SN
+    fields: [delta_ic, delta_biased]
+    multipoles: [0, 2, 4]
+    use_bispectrum: true
+    active_params: [Omega_m, sigma_8, b1, b2, bs2, bn2]
+    n_realizations: null
+    val_split: 0.1
+    test_split: 0.1
+    k_max: null
+
+  embedding:
+    type: mlp           # mlp | pca | none. Omit the block for none.
+    embedding_dim: 64
+    hidden: 256
+
+  flow:
+    type: maf           # maf | nsf
+    hidden_features: 512
+    num_transforms: 15
+    num_bins: 8
+    load: false
+    model_location: ''
+
+  train:
+    lr: 1.0e-4
+    epochs: 3000
+    batch_size: 1024
+    patience: 25
+    clip_grad: 400
+    gradient_accumulation_steps: 1
+    weight_decay: 0.0
+    scheduler_factor: 0.5
+    scheduler_patience: 10
+    scheduler_min_lr: 1.0e-6
+
+  eval:
+    do_corner: true
+    do_tarp: true
+    do_sbc: true
+    n_corner_plots: 5
+    num_samples: 1000
+    num_tarp_samples: 1000
+    num_sbc_sims: 100
+    num_sbc_samples: 1000

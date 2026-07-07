@@ -1,0 +1,6 @@
+# JVP tangent diagnostic (no Fisher computation). Runs the biased pipeline.
+# Maps to my_py_gpu_job_fisher_diagnose.sh (the bias variant; for the
+# non-bias variant pass --bias false on the CLI override).
+bias: true
+diagnose: true
+n_bins: 30

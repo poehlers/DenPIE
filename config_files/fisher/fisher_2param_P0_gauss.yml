@@ -1,0 +1,19 @@
+# Fisher (Omega_m, sigma_8) on fli_2param, final field (RSD + shot noise).
+# Data vector: [P_0] only.  Covariance: analytic Gaussian (diag).
+#   diag = Grieb+2016 multipole P-cov (here the trivial monopole 2P0^2/N_modes)
+#          + Scoccimarro diagonal B-cov (no B_0 here). No empirical sims needed,
+#          so n_cov_seeds is nominal/unused.
+res:          128
+boxsize:      1000.0
+n_g_density:  1.0e-3
+pb_step:      3
+n_seeds:      10
+n_cov_seeds:  50
+field: "fin"
+pk_multipoles: False
+joint_pb: False
+cov_type: diag
+jacrev_chunk_size: 32
+
+# Forward-mode AD + x64: growth-complete Omega_m at autodiff precision.
+derivative_method: jacfwd

@@ -1,0 +1,192 @@
+# Falcon configuration — 2-parameter base model (Ω_m, σ_8) with DiscoDJ
+#
+# Pipeline DAG:
+#
+#   cosmo_params ─────────────────────────────────────┐
+#        │                                            ▼
+#        ▼                       ┌──► delta_fin ──┬──► pk_l_fin (P_0,P_2,P_4)
+#       pk ──► delta_ic ─────────┘                └──► bk_0_fin (B_0)
+#                  ├──► pk_l_ic (P_0,P_2,P_4)
+#                  └──► bk_0_ic (B_0)
+#
+# Only Ω_m and σ_8 are sampled from the prior.
+# Ω_b, h, n_s are fixed at the Planck 2018/Quijote fiducial values.
+# delta_fin is the unbiased matter field mapped into redshift space (RSD, los=2)
+# with DESI-like Gaussian shot noise (n_g = 1e-3) baked in.
+# BFast summaries P_0/P_2/P_4 and B_0 are precomputed and stored for both fields.
+#
+# Run with:
+#   falcon sample prior --config-name config_files/config_base.yml --run-dir outputs/base_run
+
+paths:
+  import: "."                        # adds repo root to sys.path → "den_pie.forward.X" resolves to ./core/model/
+  graph:  "${run_dir}/graph"         # where model checkpoints / logs are stored
+
+# Forwarded to ray.init(**cfg.ray.init) by Falcon. Disable the dashboard
+# subprocess: it is the dominant cost on Snellius nodes and the most common
+# cause of the 30-s Ray-init timeout (hard-coded in ray/_private/node.py).
+ray:
+  init:
+    include_dashboard: false
+
+logging: {}                          # required by Falcon CLI even when empty
+
+sample:
+  prior:
+    n: 100                             # number of forward simulations to generate
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Cosmological parameters ────────────────────────────────────────
+  # Uniform prior over Ω_m and σ_8 only (Quijote simulation ranges).
+  # Ω_b, h, n_s are pinned to fiducial in _cosmo_dict_base.
+  # Posterior: p(θ | δ_fin)  — uncomment `evidence:` and `observed:` in delta_fin to train.
+  cosmo_params:
+    # evidence: [delta_fin]    # uncomment when doing inference (requires observed: in delta_fin)
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+        - ['uniform', 0.10, 0.50]   # Ω_m  (total matter density)
+        - ['uniform', 0.60, 1.00]   # σ_8  (matter power amplitude)
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm    # placeholder — replace with a
+        _input_: [delta_fin]                          # 3D CNN or summary-statistic embedding
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Linear matter power spectrum P(k) ──────────────────────────────
+  pk:
+    parents: [cosmo_params]
+    simulator:
+      _target_: den_pie.forward.PowerSpectrum
+      dim:     3
+      res:     64
+      boxsize: 320.0       # Mpc/h
+      fixed_cosmo_params:   # Ω_b, h, n_s pinned to Planck 2018/Quijote fiducial
+        Omega_b: 0.0490
+        h:       0.6711
+        n_s:     0.9624
+    ray:
+      num_gpus: 0             # runs on CPU — no GPU allocation needed
+
+  # ── Node 3: Gaussian-random initial conditions ──────────────────────────────
+  # Posterior: p(δ_IC | δ_fin)  — uncomment `evidence:` and `observed:` in delta_fin to train.
+  delta_ic:
+    parents: [pk]
+    # evidence: [delta_fin]    # uncomment when doing inference (requires observed: in delta_fin)
+    # estimator:               # replace with an appropriate high-dimensional estimator, e.g.:
+    #   _target_: falcon.estimators.ScoreModel
+    #   ...
+    simulator:
+      _target_: den_pie.forward.InitialConditions
+      dim:     3
+      res:     64
+      boxsize: 320.0
+      run_dir: ${run_dir}     # used to count existing samples → seed offset per chunk
+    ray:
+      num_gpus: 0             # runs on CPU — no GPU allocation needed
+
+  # ── Node 4: N-body forward sim (PM, bullfrog, z=3 → z=0) + RSD + shot noise ─
+  delta_fin:
+    parents: [cosmo_params, delta_ic]   # order must match simulate_batch signature
+    # observed: "./data/observed.npz['delta_fin']"  # ← uncomment when you have real data
+    simulator:
+      _target_: den_pie.forward.ForwardModel
+      dim:            3
+      res:            64
+      boxsize:        320.0
+      sub_batch_size: 1       # reduce if GPU OOM; must divide the Falcon batch size
+      apply_rsd:      true    # map final field into redshift space (Kaiser RSD)
+      los_axis:       2       # line of sight = axis 2
+      n_g_density:    1.0e-3  # (h/Mpc)³ shot-noise density (DESI-like)
+      run_dir:        ${run_dir}   # deterministic per-sample shot-noise seed
+      fixed_cosmo_params:     # Ω_b, h, n_s pinned to Planck 2018/Quijote fiducial
+        Omega_b: 0.0490
+        h:       0.6711
+        n_s:     0.9624
+      sim_params:
+        a_ini:                0.25    # z ≈ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               128     # 2 × res
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 0.5     # leaves 0.5 GPU for the 4 BFast summary actors
+
+  # ── Node 5: P_l(k) multipoles of the IC field (l=0,2,4) ────────────────────
+  pk_l_ic:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.PkMultipoles
+      boxsize:   320.0
+      res:       64
+      los_axis:  2
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 6: P_l(k) multipoles of the final field (l=0,2,4) ─────────────────
+  pk_l_fin:
+    parents: [delta_fin]
+    simulator:
+      _target_: den_pie.forward.PkMultipoles
+      boxsize:   320.0
+      res:       64
+      los_axis:  2
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 7: B_0 bispectrum monopole of the IC field ────────────────────────
+  bk_0_ic:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.BkMonopole
+      boxsize:   320.0
+      res:       64
+      dk_kF:     3
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 8: B_0 bispectrum monopole of the final field ─────────────────────
+  bk_0_fin:
+    parents: [delta_fin]
+    simulator:
+      _target_: den_pie.forward.BkMonopole
+      boxsize:   320.0
+      res:       64
+      dk_kF:     3
+      mas_order: 0
+    ray:
+      num_gpus: 0.1

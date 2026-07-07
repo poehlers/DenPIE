@@ -1,0 +1,82 @@
+# Falcon configuration — Fiducial biased tracer at res=128
+#
+# Pipeline DAG:
+#
+#   pk (FixedPowerSpectrum) ─────────────────────── stored per sample
+#   delta_ic ──────────────────────────────────────► delta_biased
+#
+# Cosmology is fixed to the Quijote/Planck 2018 fiducial throughout.
+# Bias parameters are fixed (b1=1, b2=0, bs2=0, bn2=0 = unbiased matter).
+# Only random ICs vary across samples.
+# RSD is enabled (los_axis=2) to match config_bias_base.yml.
+
+paths:
+  import: "."
+  graph:  "${run_dir}/graph"
+
+logging: {}
+
+sample:
+  prior:
+    n: 1000    # 100 sims per chunk x 10 chunks = 1000 total
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Fiducial P(k) (root node) ──────────────────────────────────────
+  pk:
+    simulator:
+      _target_: den_pie.forward.model_minimal.FixedPowerSpectrum
+      dim:     3
+      res:     64
+      boxsize: 1000.0   # Mpc/h
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Gaussian-random initial conditions (root node) ─────────────────
+  delta_ic:
+    simulator:
+      _target_: den_pie.forward.model_minimal.InitialConditions
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1
+      run_dir:        ${run_dir}
+    ray:
+      num_gpus: 0
+
+  # ── Node 3: Biased tracer (N-body + Lagrangian bias + RSD, all fixed) ──────
+  delta_biased:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.model_minimal.FixedForwardModelBias
+      dim:            3
+      res:            64
+      boxsize:        1000.0
+      sub_batch_size: 1
+      apply_rsd:      true
+      los_axis:       2
+      fiducial_bias_params:
+        b1:  1.0
+        b2:  0.0
+        bs2: 0.0
+        bn2: 0.0
+      sim_params:
+        a_ini:                0.25    # z ~ 3
+        a_end:                1.00    # z = 0
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               128     # 2 x res=128
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 1.0

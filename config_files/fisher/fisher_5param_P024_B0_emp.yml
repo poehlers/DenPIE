@@ -1,0 +1,20 @@
+# Fisher for the 5 cosmological params [Omega_m, Omega_b, h, n_s, sigma_8] on
+# fli_5param, final field only (RSD + shot noise).
+# Data vector: [P_0, P_2, P_4, B_0].  Covariance: full empirical (euclid_cov).
+# Derivatives: central finite differences (captures the full cosmo dependence,
+# incl. the N-body growth that the autodiff/stop_gradient path omits).
+#   n_data = 3 x n_P_bins + n_triangles; n_cov_seeds must satisfy the Hartlap
+#   bound (n_cov_seeds > n_data + 4). Raise it / coarsen pb_step if the run warns
+#   about a small/non-positive Hartlap factor.
+res:          128
+boxsize:      1000.0
+n_g_density:  1.0e-3
+pb_step:      3
+n_seeds:      10
+n_cov_seeds:  2400
+field: "fin"
+pk_multipoles: True
+joint_pb: True
+cov_type: euclid_cov
+derivative_method: jacfwd   # forward-mode AD + x64: growth-complete, autodiff-precision
+fd_step_kind: absolute

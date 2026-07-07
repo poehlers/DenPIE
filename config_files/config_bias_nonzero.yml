@@ -1,0 +1,227 @@
+# Falcon configuration — Biased tracer with shot noise + pre-computed P_l/B_0
+#                          (higher-order bias priors centered on b=1)
+#
+# Same as config_bias_SN.yml except the b₂, bs², bn² priors are centered on
+# 1.0 instead of 0.0 (b₁ unchanged). Companion fiducial set fixes b₂=bs²=bn²=1.
+#
+#   1. δ_biased gets per-voxel Gaussian shot noise with variance 1/N̄_g,
+#      N̄_g = n̄_g · V_cell, n̄_g = 1e-3 (h/Mpc)⁻³ (DESI-like, arXiv:2504.20130v2).
+#   2. Four new summary nodes pre-compute P_l (l=0,2,4) and B_0 of both
+#      δ_ic and the noisy δ_biased via BFast (mirroring SBI_Pk's calls).
+#
+# Pipeline DAG:
+#
+#   cosmo_params ──────────────────────────────┐
+#        │                                     ▼
+#        ▼                          delta_biased  ◄── bias_params
+#       pk ──► delta_ic ────────────────────────┘
+#                │  ├──► pk_l_ic (P_0, P_2, P_4 of δ_IC)
+#                │  └──► bk_0_ic  (B_0      of δ_IC)
+#                └──────► (consumed by delta_biased above)
+#       delta_biased ──┬──► pk_l_fin (P_0, P_2, P_4 of δ_g)
+#                      └──► bk_0_fin  (B_0           of δ_g)
+#
+# Run with:
+#   falcon sample prior --config-name config_files/config_bias_nonzero.yml --run-dir outputs/bias_nonzero_run
+
+paths:
+  import: "."
+  graph:  "${run_dir}/graph"
+
+# Forwarded to ray.init(**cfg.ray.init) by Falcon (falcon/cli.py:641).
+# Disable the dashboard subprocess: it is the dominant cost on Snellius
+# nodes and the most common cause of the 30-s Ray-init timeout (the
+# timeout is hard-coded in ray/_private/node.py:365 — no env var raises it).
+ray:
+  init:
+    include_dashboard: false
+
+logging: {}
+
+sample:
+  prior:
+    n: 100
+
+# ─────────────────────────────────────────────────────────────────────────────
+graph:
+
+  # ── Node 1: Cosmological parameters ────────────────────────────────────────
+  cosmo_params:
+    # evidence: [delta_biased]
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+        - ['uniform', 0.10, 0.50]   # Ω_m
+        - ['uniform', 0.60, 1.00]   # σ_8
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm
+        _input_: [delta_biased]
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+
+  # ── Node 2: Bias parameters ─────────────────────────────────────────────────
+  # Higher-order bias priors centered on 1.0 (vs 0.0 in config_bias_SN.yml).
+  bias_params:
+    # evidence: [delta_biased]
+    simulator:
+      _target_: falcon.priors.Hypercube
+      priors:
+        - ['normal',  1.0,  0.5]    # b₁
+        - ['normal',  1.0,  2.0]    # b₂
+        - ['normal',  1.0,  2.0]    # bs²
+        - ['normal',  1.0,  2.0]    # bn²
+    estimator:
+      _target_: falcon.estimators.Flow
+      loop:
+        num_epochs: 300
+        batch_size: 8
+        early_stop_patience: 32
+      network:
+        net_type: nsf
+        theta_norm: true
+        norm_momentum: 0.01
+      embedding:
+        _target_: falcon.embeddings.LazyOnlineNorm
+        _input_: [delta_biased]
+      optimizer:
+        lr: 0.001
+        lr_decay_factor: 0.5
+        scheduler_patience: 16
+      inference:
+        gamma: 0.5
+        discard_samples: true
+        log_ratio_threshold: -20
+    ray:
+      num_gpus: 0
+
+  # ── Node 3: Linear matter power spectrum P(k) ──────────────────────────────
+  pk:
+    parents: [cosmo_params]
+    simulator:
+      _target_: den_pie.forward.PowerSpectrum
+      dim:     3
+      res:     128
+      boxsize: 1000.0
+      fixed_cosmo_params:
+        Omega_b: 0.0490
+        h:       0.6711
+        n_s:     0.9624
+    ray:
+      num_gpus: 0
+
+  # ── Node 4: Gaussian-random initial conditions ──────────────────────────────
+  delta_ic:
+    parents: [pk]
+    # evidence: [delta_biased]
+    simulator:
+      _target_: den_pie.forward.InitialConditions
+      dim:     3
+      res:     128
+      boxsize: 1000.0
+      run_dir: ${run_dir}
+    ray:
+      num_gpus: 0
+
+  # ── Node 5: Biased tracer with shot noise (N-body + bias + RSD + ε) ─────────
+  delta_biased:
+    parents: [cosmo_params, delta_ic, bias_params]
+    # observed: "./data/observed_biased_nonzero.npz['delta_biased']"
+    simulator:
+      _target_: den_pie.forward.model_bias.ForwardModelBias
+      dim:            3
+      res:            128
+      boxsize:        1000.0
+      sub_batch_size: 1
+      apply_rsd:      true
+      los_axis:       2
+      fixed_cosmo_params:
+        Omega_b: 0.0490
+        h:       0.6711
+        n_s:     0.9624
+      n_g_density: 1.0e-3       # (h/Mpc)⁻³; DESI-like (arXiv:2504.20130v2)
+      run_dir:     ${run_dir}   # deterministic per-sample SN seed
+      sim_params:
+        a_ini:                0.25
+        a_end:                1.00
+        stepper:              bullfrog
+        method:               pm
+        res_pm:               256
+        time_var:             D
+        alpha:                1.5
+        theta:                0.5
+        antialias:            0
+        grad_kernel_order:    4
+        laplace_kernel_order: 0
+        n_resample:           1
+        n_steps:              1
+        deconvolve:           false
+        nlpt_order_ics:       2
+        worder:               2
+    ray:
+      num_gpus: 0.5     # leaves 0.5 GPU for the 4 BFast summary actors
+
+  # ── Node 6: P_l(k) multipoles of the IC field (l=0,2,4) ────────────────────
+  pk_l_ic:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.PkMultipoles
+      boxsize:   1000.0
+      res:       128
+      los_axis:  2
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 7: P_l(k) multipoles of the noisy biased field (l=0,2,4) ──────────
+  pk_l_fin:
+    parents: [delta_biased]
+    simulator:
+      _target_: den_pie.forward.PkMultipoles
+      boxsize:   1000.0
+      res:       128
+      los_axis:  2
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 8: B_0 bispectrum monopole of the IC field ────────────────────────
+  bk_0_ic:
+    parents: [delta_ic]
+    simulator:
+      _target_: den_pie.forward.BkMonopole
+      boxsize:   1000.0
+      res:       128
+      dk_kF:     3
+      mas_order: 0
+    ray:
+      num_gpus: 0.1
+
+  # ── Node 9: B_0 bispectrum monopole of the noisy biased field ──────────────
+  bk_0_fin:
+    parents: [delta_biased]
+    simulator:
+      _target_: den_pie.forward.BkMonopole
+      boxsize:   1000.0
+      res:       128
+      dk_kF:     3
+      mas_order: 0
+    ray:
+      num_gpus: 0.1

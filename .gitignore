@@ -23,6 +23,8 @@
 !/params/density_bias_train_stage2_flow_maf_HR_both_resume.yaml
 !/params/density_bias_train_stage3_finetune_maf_HR_both.yaml
 !/params/density_bias_plot_3stage_maf_HR_both.yaml
+!/params/spectra_train_fli_bias_SN.yaml
+!/params/spectra_train_fli_bias_SN_PCA.yaml
 
 # egg file
 den_pie.egg-info
@@ -47,10 +49,19 @@ wandb/
 # data
 /data/**
 
-# tests
+# tests: ignore scratch tests, keep the committed smoke test
 /tests/**
+!/tests/test_smoke.py
 
 # python
 __pycache__/
 **/__pycache__/
 *.pyc
+.pytest_cache/
+
+# docs build output + LaTeX figure intermediates (rendered png/pdf + sources are kept)
+docs/_build/
+docs/_figures/forward_model/body.tex
+docs/_figures/forward_model/wrapper.pdf
+docs/_figures/forward_model/*.aux
+docs/_figures/forward_model/*.log

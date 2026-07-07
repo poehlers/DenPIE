@@ -1,0 +1,8 @@
+# Joint P+B Fisher with both IC and FIN data vectors (4 blocks: P_ic, B_ic, P_fin, B_fin).
+# Maps to my_py_gpu_job_fisher_bias_PB_both.sh
+bias: true
+joint_pb: true
+field: both
+n_seeds: 3
+pb_step: 2
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_base

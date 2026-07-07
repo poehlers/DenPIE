@@ -1,0 +1,21 @@
+# Fisher (Omega_m, sigma_8) on fli_2param, final field (RSD + shot noise).
+# Data vector: [P_0, P_2, P_4, B_0].
+# Covariance: euclid_cov_no_pb_cross = the FULL empirical (np.cov) covariance —
+#   identical empirical P-P and B-B blocks to fisher_2param_P024_B0_emp — but with
+#   the P-B off-diagonal block ZEROED. Compared against the cross-on _emp run this
+#   isolates the impact of the power-spectrum-bispectrum cross covariance.
+#   Same n_cov_seeds as _emp so the only difference is the removed cross.
+res:          128
+boxsize:      1000.0
+n_g_density:  1.0e-3
+pb_step:      3
+n_seeds:      10
+n_cov_seeds:  2400
+field: "fin"
+pk_multipoles: True
+joint_pb: True
+cov_type: euclid_cov_no_pb_cross
+jacrev_chunk_size: 32
+
+# Forward-mode AD + x64: growth-complete Omega_m at autodiff precision.
+derivative_method: jacfwd

@@ -1,0 +1,8 @@
+# Joint P+B Fisher on the Lagrangian field (no N-body).
+# Maps to my_py_gpu_job_fisher_bias_PB_ic.sh
+bias: true
+joint_pb: true
+field: ic
+n_seeds: 3
+pb_step: 2
+sbi_samples: /projects/prjs1926/data/fli_data/fli_bias_base
