@@ -5,14 +5,10 @@ Because the {doc}`neural posterior <inference>` and the
 and parameter conventions, they can be drawn on a single corner — a direct check
 of how close the (Gaussian) Fisher approximation is to the full SBI posterior.
 
-```{image} _static/sbi_vs_fisher_example.png
-:alt: SBI posterior overlaid on a Fisher forecast
-:width: 640px
-:align: center
+```{note}
+A comparison figure will be added here once generated from a trained SBI run and
+a matching Fisher forecast with `den_pie fisher-compare` (see below).
 ```
-
-*(Illustrative overlay: Fisher 68/95% ellipses and Gaussian marginals in blue,
-an SBI posterior sample set in red, fiducial values in orange.)*
 
 ## Running
 
