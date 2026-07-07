@@ -1,0 +1,12 @@
+# Version constraints applied to EVERY pip install during make_unified_venv.sh
+# (via PIP_CONSTRAINT) so transitive dependencies cannot drift the GPU stacks.
+# These match the known-good flivenv pins. DiscoDJ/BFast are built against
+# jax 0.9.1 and the jax CUDA plugins are 0.9.1, so jax/jaxlib MUST stay 0.9.1
+# (a jaxlib 0.10.x drift silently disables CUDA and breaks DiscoDJ).
+jax==0.9.1
+jaxlib==0.9.1
+jax-cuda12-pjrt==0.9.1
+jax-cuda12-plugin==0.9.1
+torch==2.10.0
+torchvision==0.25.0
+torchaudio==2.10.0

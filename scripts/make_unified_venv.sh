@@ -32,6 +32,10 @@ echo "==> Creating venv at: $VENV  (python: $PYBIN)"
 source "$VENV/bin/activate"
 python -m pip install --upgrade pip wheel setuptools
 
+# Pin the GPU stacks for EVERY pip install below so transitive deps can't drift
+# them (jax/jaxlib must stay 0.9.1 to match the CUDA plugins + DiscoDJ/BFast).
+export PIP_CONSTRAINT="${REPO_ROOT}/constraints-unified.txt"
+
 echo "==> [1/4] PyTorch (CUDA 12.8 build) + torchvision/torchaudio"
 pip install --index-url https://download.pytorch.org/whl/cu128 \
     torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0
@@ -51,8 +55,10 @@ pip install sbi==0.26.1 nflows==0.14 FrEIA==0.2 getdist==1.7.6 optuna==4.8.0 tar
 pip install -e "${REPO_ROOT}[docs]"
 
 # JAX must not pre-grab the whole GPU when torch is also resident in-process.
-mkdir -p "$VENV/etc/conda/activate.d" 2>/dev/null || true
-echo 'export XLA_PYTHON_CLIENT_PREALLOCATE=false' >> "$VENV/bin/activate"
+# Non-fatal: some home-dir ACLs make `activate` read-only, so don't abort on it.
+chmod u+w "$VENV/bin/activate" 2>/dev/null || true
+echo 'export XLA_PYTHON_CLIENT_PREALLOCATE=false' >> "$VENV/bin/activate" 2>/dev/null \
+    || echo "  (note: could not append to activate; set XLA_PYTHON_CLIENT_PREALLOCATE=false in your run scripts)"
 
 echo
 echo "==> Unified env ready: $VENV"
